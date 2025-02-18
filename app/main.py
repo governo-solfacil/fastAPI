@@ -75,7 +75,7 @@ async def verify_webhook(request: Request):
     challenge = params.get("hub.challenge")
     
     # Replace 'your_verify_token' with your actual verify token
-    verify_token = "your_verify_token"
+    verify_token = "2123"
     
     if mode and token:
         if mode == "subscribe" and token == verify_token:
