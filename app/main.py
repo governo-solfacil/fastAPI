@@ -2,6 +2,9 @@ from fastapi import FastAPI, Request
 from typing import Dict, Any
 import logging
 import sys
+from supabase import create_client
+import os
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -11,6 +14,11 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# Initialize Supabase client
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
+supabase = create_client(supabase_url, supabase_key)
 
 app = FastAPI(
     title="My FastAPI App",
@@ -29,32 +37,34 @@ async def health_check():
 
 @app.post("/webhook/whatsapp")
 async def whatsapp_webhook(request: Request):
-    # Get the raw JSON data from the request
     data: Dict[Any, Any] = await request.json()
-    
-    # Log the incoming webhook data
     logger.info(f"Received webhook data: {data}")
     
-    # Extract the message status updates
     try:
         entries = data.get("entry", [])
         for entry in entries:
             changes = entry.get("changes", [])
             for change in changes:
                 if change.get("field") == "messages":
-                    messages = change.get("value", {}).get("messages", [])
                     statuses = change.get("value", {}).get("statuses", [])
                     
                     # Process message statuses
                     for status in statuses:
-                        status_type = status.get("status")  # sent, delivered, read, failed
                         message_id = status.get("id")
-                        timestamp = status.get("timestamp")
+                        status_type = status.get("status")
                         
-                        logger.info(f"Message {message_id} status: {status_type} at {timestamp}")
+                        if not message_id:
+                            continue
+                            
+                        # Update status only if message exists in our system
+                        result = supabase.table("whatsapp_messages").update({
+                            "status": status_type
+                        }).eq("whatsapp_message_id", message_id).execute()
                         
-                        # Here you can add your own logic to handle different status types
-                        # For example, update your database, send notifications, etc.
+                        if result.data:
+                            logger.info(f"Updated status for message {message_id} to {status_type}")
+                        else:
+                            logger.info(f"Ignored status update for unknown message {message_id}")
         
         return {"status": "success"}
     
